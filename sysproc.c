@@ -89,3 +89,13 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_settickets(void)
+{
+  int numbers;
+  if (argint(0, &numbers) < 0)
+    return -1;
+  
+  return settickets(numbers);
+}

@@ -87,6 +87,8 @@ allocproc(void)
 
 found:
   p->state = EMBRYO;
+  p->tickets = 1;
+  p->ticks = 0;
   p->pid = nextpid++;
 
   release(&ptable.lock);
@@ -130,6 +132,8 @@ userinit(void)
     panic("userinit: out of memory?");
   inituvm(p->pgdir, _binary_initcode_start, (int)_binary_initcode_size);
   p->sz = PGSIZE;
+  p->tickets = 1;
+  p->ticks = 0;
   memset(p->tf, 0, sizeof(*p->tf));
   p->tf->cs = (SEG_UCODE << 3) | DPL_USER;
   p->tf->ds = (SEG_UDATA << 3) | DPL_USER;
@@ -198,6 +202,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->tickets = curproc->tickets;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -339,12 +344,18 @@ scheduler(void)
       // Switch to chosen process.  It is the process's job
       // to release ptable.lock and then reacquire it
       // before jumping back to us.
-      c->proc = p;
-      switchuvm(p);
-      p->state = RUNNING;
+      for (int i = 0; i < p->tickets; i++) {
+        if (p->state != RUNNABLE) {
+          break;
+        }
+        c->proc = p;
+        switchuvm(p);
+        p->state = RUNNING;
+        p->ticks++;
 
-      swtch(&(c->scheduler), p->context);
-      switchkvm();
+        swtch(&(c->scheduler), p->context);
+        switchkvm();
+      }
 
       // Process is done running for now.
       // It should have changed its p->state before coming back.
@@ -494,6 +505,18 @@ kill(int pid)
   }
   release(&ptable.lock);
   return -1;
+}
+
+int
+settickets(int numbers) {
+  if (numbers < 1) {
+    return -1;
+  }
+
+  struct proc *cur_proc = myproc();
+  cur_proc->tickets = numbers;
+
+  return 0;
 }
 
 //PAGEBREAK: 36
