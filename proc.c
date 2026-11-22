@@ -1,6 +1,7 @@
 #include "types.h"
 #include "defs.h"
 #include "param.h"
+#include "pstat.h"
 #include "memlayout.h"
 #include "mmu.h"
 #include "x86.h"
@@ -515,6 +516,30 @@ settickets(int numbers) {
 
   struct proc *cur_proc = myproc();
   cur_proc->tickets = numbers;
+
+  return 0;
+}
+
+int
+getpinfo(struct pstat *ps) {
+  if (!ps)
+    return -1;
+  
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    int cur_slot = p - ptable.proc;
+    if(p->state != UNUSED) {
+      ps->inuse[cur_slot] = 1;
+      ps->pid[cur_slot] = p->pid;
+      ps->tickets[cur_slot] = p->tickets;
+      ps->ticks[cur_slot] = p->ticks;
+    } else {
+      ps->inuse[cur_slot] = ps->pid[cur_slot] = ps->tickets[cur_slot] = ps->ticks[cur_slot] = 0;
+    }
+  }
+  release(&ptable.lock);
 
   return 0;
 }
